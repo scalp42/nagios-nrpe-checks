@@ -15,7 +15,7 @@
 #
 
 # Location of the conntrackd user-space utility ...
-CONNTRACKD_BINARY  = '/usr/sbin/conntrackd'
+CONNTRACKD_BINARY = '/usr/sbin/conntrackd'
 
 # Default exit codes as per Nagios NRPE protocol ...
 STATUS_OK      = 0
@@ -62,7 +62,7 @@ Usage:
   # Only root is allowed to access content of Kernel space conntrack tables ...
   unless Process.uid == 0 or Process.euid == 0
     # We might be run from within an interactive terminal ...
-    message = STDOUT.tty? ? ["#{$0}", 0] : ["WARNING", STATUS_WARNING]
+    message = STDOUT.tty? ? ["#{$0}", 0] : ['WARNING', STATUS_WARNING]
 
     puts "#{message.first}: you have to be a super-user to run this script ..."
     exit message.last
@@ -78,42 +78,86 @@ Usage:
   cache_internal = 0
   cache_external = 0
 
+  # We will store state of parsing here ...
+  seen_internal = false
+  seen_external = false
+
+  #
+  # We will use this to mark that there was output of some sort ...
+  #
+  # This is to determine that there was some output but we have
+  # nothing that can handle it during parsing stage below and
+  # therefore it would be safe to assume that even if conntrackd
+  # is running an unknown error may have still occurred ...
+  #
+  seen_output = false
+
   # We request and process content of the conntrack cache ...
   %x{ #{conntrackd_binary} -s cache 2>&1 }.each do |line|
     # Remove bloat ...
     line.strip!
+
+    # Got both?  Break out ...
+    break if seen_internal and seen_external
 
     # Skip lines that do not interest us at all ...
     next if line.match(/^\s+/)
 
     # Process output ...
     case line
+    when /^can\'t open config.+/
+      # To catch potential misconfiguration of the conntrackd ...
+      puts "CRITICAL: Unable to process conntrackd output.  " +
+        "The conntrackd daemon cannot open its configuration file."
+      exit STATUS_CRITIAL
     when /^can\'t connect:.+/
       #
-      # When we have anything starting with "can't connect (...)" it is
+      # When we have a line starting with "can't connect (...)" it is
       # probably an error and therefore we terminate immediately ...
       #
       puts "CRITICAL: Unable to process conntrackd output.  " +
         "The conntrackd daemon might be in a broken state."
       exit STATUS_CRITIAL
     when /cache:internal.+objects:\s+/
+      # Not that we have details of internal cache ...
+      seen_internal = true
+
       # Take the value only ...
       value = line.split(':').last.strip
 
       cache_internal += value.to_i
     when /cache:external.+objects:\s+/
+      # Note that we have details of external cache ...
+      seen_external = true
+
       # Take the value only ...
       value = line.split(':').last.strip
 
       cache_external += value.to_i
     else
+      # Some sort of output was given ...
+      seen_output = true
+
       # Skip irrelevant entries ...
       next
     end
   end
 
-  # At this point in time everything should be up and running ...
-  puts "OK: conntrackd is processing.  Active objects: (internal: " +
-    "#{cache_internal}) (external: #{cache_external})."
-  exit STATUS_OK
+  if seen_output and (seen_internal and seen_external)
+    # At this point in time everything should be up and running ...
+    puts "OK: conntrackd is processing.  Active objects: (internal: " +
+      "#{cache_internal}) (external: #{cache_external})."
+    exit STATUS_OK
+  elsif seen_output and not (seen_internal and seen_external)
+    #
+    # We have seen an output of some some but not the one we sought for
+    # which could indicate that an unknown output and/or error may have
+    # occurred ...
+    #
+    puts "UNKNOWN: Unable to process conntrackd output.  " +
+      "Unknown or erroneous output was given."
+    exit STATUS_UNKNOWN
+  end
 end
+
+# vim: set ts=2 sw=2 et :
