@@ -17,6 +17,10 @@
 # Location of the conntrackd user-space utility ...
 CONNTRACKD_BINARY = '/usr/sbin/conntrackd'
 
+# Default exit codes ...
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
+
 # Default exit codes as per Nagios NRPE protocol ...
 STATUS_OK      = 0
 STATUS_WARNING = 1
@@ -33,44 +37,46 @@ if $0 == __FILE__
   # Very rudimentary approach ...
   option, argument = ARGV.shift, ARGV.shift
 
-  case option
-  when /^-h|--help$/
-    puts <<-EOS
+  if option and not option.empty?
+    case option
+    when /^-h|--help$/
+      puts <<-EOS
 
-Check whether conntrackd daemon is running and processing events correctly.
+Check whether the conntrackd daemon is running and processing events correctly.
 
 Usage:
 
-  #{$0} [--conntrackd-binary] [--help]
+  #{$0} [--conntrackd-binary <BINARY>] [--help]
 
   Options:
 
-    --conntrackd-binary  -c  Optional.  Specify the location of the conntrackd user-space binary to use.
+    --conntrackd-binary  -b  Optional.  Specify the location of the conntrackd user-space binary to use.
                                         Defaults to #{CONNTRACKD_BINARY}.
 
     --help               -h  This help screen.
 
   Note: You have to be a super-user in order to run this script ...
 
-    EOS
-    exit 0
-  when /^-c|--conntrackd-binary$/
-    # Custom location of the conntrackd user-space binary was given ...
-    conntrackd_binary = argument.strip
+      EOS
+      exit EXIT_SUCCESS
+    when /^-b|--conntrackd-binary$/
+      # Custom location of the conntrackd user-space binary was given ...
+      conntrackd_binary = argument.strip
+    else
+      puts "Unknown option given.  Please refer to `--help' for more details ..."
+      exit EXIT_FAILURE
+    end
   end
 
   # Only root is allowed to access content of Kernel space conntrack tables ...
   unless Process.uid == 0 or Process.euid == 0
-    # We might be run from within an interactive terminal ...
-    message = STDOUT.tty? ? ["#{$0}", 0] : ['WARNING', STATUS_WARNING]
-
-    puts "#{message.first}: you have to be a super-user to run this script ..."
-    exit message.last
+    puts 'WARNING: You have to be a super-user to run this script ...'
+    exit STATUS_WARNING
   end
 
   # Check whether the conntrackd user-space utility is there ...
   unless File.exists?(conntrackd_binary)
-    puts "UNKNOWN: Unable to locate conntrackd user-space binary ..."
+    puts 'UNKNOWN: Unable to locate conntrackd user-space binary ...'
     exit STATUS_UNKNOWN
   end
 
@@ -107,16 +113,16 @@ Usage:
     case line
     when /^can\'t open config.+/
       # To catch potential misconfiguration of the conntrackd ...
-      puts "CRITICAL: Unable to process conntrackd output.  " +
-        "The conntrackd daemon cannot open its configuration file."
+      puts 'CRITICAL: Unable to process conntrackd output.  ' +
+        'The conntrackd daemon cannot open its configuration file.'
       exit STATUS_CRITIAL
     when /^can\'t connect:.+/
       #
       # When we have a line starting with "can't connect (...)" it is
       # probably an error and therefore we terminate immediately ...
       #
-      puts "CRITICAL: Unable to process conntrackd output.  " +
-        "The conntrackd daemon might be in a broken state."
+      puts 'CRITICAL: Unable to process conntrackd output.  ' +
+        'The conntrackd daemon might be in a broken state.'
       exit STATUS_CRITIAL
     when /cache:internal.+objects:\s+/
       # Not that we have details of internal cache ...
@@ -154,8 +160,8 @@ Usage:
     # which could indicate that an unknown output and/or error may have
     # occurred ...
     #
-    puts "UNKNOWN: Unable to process conntrackd output.  " +
-      "Unknown or erroneous output was given."
+    puts 'UNKNOWN: Unable to process conntrackd output.  ' +
+      'Unknown or erroneous output was given.'
     exit STATUS_UNKNOWN
   end
 end
