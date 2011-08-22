@@ -14,6 +14,8 @@
 # When that happens it has to be put to sleep with kill -9, sadly ...
 #
 
+require 'getoptlong'
+
 # Location of the conntrackd user-space utility ...
 CONNTRACKD_BINARY = '/usr/sbin/conntrackd'
 
@@ -27,20 +29,8 @@ STATUS_WARNING = 1
 STATUS_CRITIAL = 2
 STATUS_UNKNOWN = 3
 
-if $0 == __FILE__
-  # Make sure that we flush buffers as soon as possible ...
-  STDOUT.sync = true
-  STDERR.sync = true
-
-  conntrackd_binary = CONNTRACKD_BINARY
-
-  # Very rudimentary approach ...
-  option, argument = ARGV.shift, ARGV.shift
-
-  if option and not option.empty?
-    case option
-    when /^-h|--help$/
-      puts <<-EOS
+def print_usage
+  puts <<-EOS
 
 Check whether the conntrackd daemon is running and processing events correctly.
 
@@ -57,15 +47,36 @@ Usage:
 
   Note: You have to be a super-user in order to run this script ...
 
-      EOS
-      exit EXIT_SUCCESS
-    when /^-b|--conntrackd-binary$/
-      # Custom location of the conntrackd user-space binary was given ...
-      conntrackd_binary = argument.strip
-    else
-      puts "Unknown option given.  Please refer to `--help' for more details ..."
-      exit EXIT_FAILURE
+  EOS
+
+  exit EXIT_SUCCESS
+end
+
+if $0 == __FILE__
+  # Make sure that we flush buffers as soon as possible ...
+  STDOUT.sync = true
+  STDERR.sync = true
+
+  conntrackd_binary = CONNTRACKD_BINARY
+
+  # An attempt to pass an argument was made ...
+  print_usage if ARGV.first == '-'
+
+  # Take care about command line switches ...
+  begin
+    GetoptLong.new(
+      ['--conntrackd-binary', '-b', GetoptLong::OPTIONAL_ARGUMENT],
+      ['--help',              '-?', GetoptLong::NO_ARGUMENT      ]
+    ).each do |option, argument|
+      case option
+      when /^(?:--conntrackd-binary|-b)$/
+        conntrackd_binary = argument.strip
+      when /^(?:--help|-h)$/
+        print_usage
+      end
     end
+  rescue GetoptLong::InvalidOption, GetoptLong::MissingArgument
+    print_usage
   end
 
   # Only root is allowed to access content of Kernel space conntrack tables ...

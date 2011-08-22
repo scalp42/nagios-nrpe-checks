@@ -17,6 +17,8 @@
 # feasible cure to this behaviour ...
 #
 
+require 'getoptlong'
+
 # Location of the host utility ...
 HOST_BINARY = '/usr/bin/host'
 
@@ -30,6 +32,35 @@ STATUS_WARNING = 1
 STATUS_CRITIAL = 2
 STATUS_UNKNOWN = 3
 
+def print_usage
+  puts <<-EOS
+
+Check whether a domain name resolution is functioning correctly for a given host.
+
+Usage:
+
+  #{$0} --host-name <HOST NAME> [--host-binary <BINARY>] [--help]
+
+  Options:
+
+    --host-name    -h  Required.  Specify the host name to use when attempting
+                                  resolution of the domain name into an IP address.
+
+    --host-binary  -b  Optional.  Specify the location of the host utility binary to use.
+                                  Defaults to #{HOST_BINARY}.
+
+    --help         -?  This help screen.
+
+  Note: This idea is to check whether named is functioning correctly as resolver,
+        caching server or forwarder rather than checking the named daemon per se.
+        Resolution is done via querying for the "A" type RR only ...
+
+  EOS
+
+  exit EXIT_SUCCESS
+end
+
+
 if $0 == __FILE__
   # Make sure that we flush buffers as soon as possible ...
   STDOUT.sync = true
@@ -41,60 +72,32 @@ if $0 == __FILE__
   # A host name for which we attempt to resolve an IP address ...
   host_name = ''
 
-  # Very rudimentary approach ...
-  option, argument = ARGV.shift, ARGV.shift
+  # An attempt to pass an argument was made ...
+  print_usage if ARGV.first == '-'
 
-  if option and not option.empty?
-    case option
-    # We have -? here as -h is taken ...
-    when /^-\?|--help$/
-      puts <<-EOS
-
-Check whether a domain name resolution is functioning correctly for a given host.
-
-Usage:
-
-  #{$0} --host-name <HOST NAME> [--host-binary <BINARY>] [--help]
-
-  Options:
-
-    --host-name    -h  Mandatory.  Specify the host name to use when attempting
-                                   resolution of the domain name into an IP address.
-
-    --host-binary  -b  Optional.   Specify the location of the host utility binary to use.
-                                   Defaults to #{HOST_BINARY}.
-
-    --help         -?  This help screen.
-
-  Note: This idea is to check whether named is functioning correctly as resolver,
-        caching server or forwarder rather than checking the named daemon per se.
-        Resolution is done via querying for the "A" type RR only ...
-
-      EOS
-      exit EXIT_SUCCESS
-    when /^-h|--host-name$/
-      # Check whether a host name was given ...
-      unless argument and not argument.empty?
-        puts "Option `--host-name' requires an argument ..."
-        exit EXIT_FAILURE
+  # Take care about command line switches ...
+  begin
+    GetoptLong.new(
+      ['--host-name',   '-h', GetoptLong::REQUIRED_ARGUMENT],
+      ['--host-binary', '-b', GetoptLong::OPTIONAL_ARGUMENT],
+      ['--help',        '-?', GetoptLong::NO_ARGUMENT      ]
+    ).each do |option, argument|
+      case option
+      when /^(?:--host-name|-h)$/
+        host_name = argument.strip
+      when /^(?:--host-binary|-b)$/
+        host_binary = argument.strip
+      # We have -? here as -h is taken ...
+      when /^(?:--help|-?)$/
+        print_usage
       end
-
-      # Host name for which we attempt to make domain name resolution ...
-      host_name = argument.strip
-    when /^-b|--host-binary$/
-      # Custom location of the host utility binary was given ...
-      host_binary = argument.strip
-    else
-      puts "Unknown option given.  Please refer to `--help' for more details ..."
-      exit EXIT_FAILURE
     end
+  rescue GetoptLong::InvalidOption, GetoptLong::MissingArgument
+    print_usage
   end
 
   # Check whether a host name was given ...
-  if host_name.empty?
-    puts "Option `--host-name' is mandatory and cannot be empty ..."
-    exit EXIT_FAILURE
-  end
+  print_usage if host_name.empty?
 
   # Check whether the conntrackd user-space utility is there ...
   unless File.exists?(host_binary)
