@@ -112,7 +112,7 @@ if $0 == __FILE__
   seen_address = false
 
   # We request and process results of a domain name query for a given host name ...
-  %x{ #{host_binary} -t A #{host_name} 2>&1 }.each do |line|
+  %x{ #{host_binary} -t A #{host_name} 2>&1 }.each_line do |line|
     # Remove bloat ...
     line.strip!
 
@@ -181,3 +181,4 @@ if $0 == __FILE__
 end
 
 # vim: set ts=2 sw=2 et :
+# encoding: utf-8

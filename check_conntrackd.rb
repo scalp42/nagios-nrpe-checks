@@ -110,7 +110,7 @@ if $0 == __FILE__
   seen_output = false
 
   # We request and process content of the conntrack cache ...
-  %x{ #{conntrackd_binary} -s cache 2>&1 }.each do |line|
+  %x{ #{conntrackd_binary} -s cache 2>&1 }.each_line do |line|
     # Remove bloat ...
     line.strip!
 
@@ -178,3 +178,4 @@ if $0 == __FILE__
 end
 
 # vim: set ts=2 sw=2 et :
+# encoding: utf-8
